@@ -1,7 +1,3 @@
-Este es el código de mi proyecto de Trabajo de Fin de Grado, Uso del Machine Learning para el reconocimiento del alfabeto dactilológico español.
-
-El proyecto consiste en la clasficación de imágenes de manos representando diferentes letras del alfabeto dactilológico español. Estas imágenes están capturadas gracias a un script de captura de imágenes, posteriormente serán transformadas en un conjunto de coordenadas mediante la librería MediaPipe de Google, y finalmente estos datos serán procesados por varios algoritmos diferentes. El proyecto se centra, además de en el procesamiento y clasificación de las imágenes, en la comparativa de dichos algoritmos, en términos de acierto, rendimiento o sostenibilidad.
-
 # Uso del Machine Learning para el reconocimiento del alfabeto dactilológico español
 
 ## Introducción
