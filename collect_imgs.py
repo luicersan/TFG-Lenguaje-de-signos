@@ -2,14 +2,15 @@ import os
 import cv2
 
 
-DATA_DIR = './data'
+DATA_DIR = './data_r'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
+
 number_of_letters = 3
-letters_array = ['a','b','c']
+letters_array = ['t','u']
 dataset_size = 10
-wait_frames = 100
+wait_frames = 1200
 
 cap = cv2.VideoCapture(0)
 for j in range(len(letters_array)):
@@ -18,6 +19,7 @@ for j in range(len(letters_array)):
         os.makedirs(os.path.join(DATA_DIR, letters_array[j]))
 
     print('Collecting data for class {}'.format(j))
+
 
     done = False
     while True:
@@ -36,6 +38,20 @@ for j in range(len(letters_array)):
         cv2.imwrite(os.path.join(DATA_DIR, letters_array[j], '{}.jpg'.format(counter)), frame)
 
         counter += 1
-
 cap.release()
+
+# Ampliación de la variabilidad del dataset
+for letter in letters_array:
+    letter_dir = os.path.join(DATA_DIR, letter)
+    for filename in os.listdir(letter_dir):
+        if filename.endswith('.jpg'):
+            img_path = os.path.join(letter_dir, filename)
+            img = cv2.imread(img_path)
+            if img is not None:
+                flipped_img = cv2.flip(img, 1)
+                flipped_img_path = os.path.join(letter_dir, 'flipped_' + filename)
+                cv2.imwrite(flipped_img_path, flipped_img)
+
+
+
 cv2.destroyAllWindows()
