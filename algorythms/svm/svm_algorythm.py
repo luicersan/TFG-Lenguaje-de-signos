@@ -142,6 +142,6 @@ if cross_val:
     cross_validation()
 
 if repeat:
-    print("\n--- Ejecutando Repetición de Entrenamiento Paralelizada ---")
+    print("\n--- Ejecutando Repetición de Entrenamiento ---")
     n_it = 50
     repeat_training(n_it, model, x_train, y_train, x_test, y_test)
