@@ -3,6 +3,7 @@ import json
 import os
 import time
 import psutil
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.metrics import accuracy_score
@@ -19,7 +20,7 @@ cv_folds = 9 # Nº de pliegues validación cruzada
 adjust_cross_val = False
 k_values=[5,6,7,8,9,10,11,12,13,14,15,16,17,18] # Valores para el ajuste de validación cruzada
 
-repeat = True
+repeat = False
 n_it = 30 # Nº de iteraciones de la repetición de entrenamiento
 
 # Ruta del archivo JSON para guardar/cargar los mejores hiperparámetros
@@ -70,7 +71,7 @@ else:
 
     print(f"Hiperparámetros cargados: {mejores_hiperparámetros}")
 
-# Definir el modelo utilizando los hiperparámetros cargados o encontrados
+# Definir el modelo con hiperparámetros cargados o encontrados (ahora de define en las funciones)
 '''model = RandomForestClassifier(
     n_estimators=mejores_hiperparámetros['n_estimators'],
     max_depth=mejores_hiperparámetros['max_depth'],
@@ -123,10 +124,14 @@ def cross_validation(k):
     )
 
     scores = cross_val_score(model, data, labels, cv=k, scoring='accuracy', n_jobs=-1)
+    std_score = np.std(scores)
+    sem_score = std_score / np.sqrt(n_it)
 
-    # Mostrar la precisión media y la desviación estándar
+    # Mostrar la precisión media, desviación estándar y error estándar
     print(f'Precisión media con {k}-Fold Cross-Validation: {scores.mean() * 100:.2f}%')
-    print(f'Desviación estándar: {scores.std() * 100:.2f}%')
+    print(f'Desviación estándar: {std_score * 100:.2f}%')
+    print(f'Error estándar de la media: {sem_score * 100:.2f}%')
+
     
     return scores.mean(), scores.std()
 
@@ -135,14 +140,26 @@ def cross_validation(k):
 # Alternativa: Repetición de Entrenamiento
 # -----------------------------------------------------
 @medir_recursos
-def repeat_training(n_it):
+def repeat_training(n_it, labels, test_size):
+    """
+    Repite el entrenamiento del modelo varias veces con diferentes divisiones de datos y aleatoriedad en el modelo, promediando los resultados.
 
+    :param n_it: Número de iteraciones
+    :param data: Datos de entrada
+    :param labels: Etiquetas
+    :param model_params: Diccionario de parámetros para RandomForestClassifier
+    :param test_size: Proporción del conjunto de prueba
+    :return: Media y desviación estándar de las puntuaciones de precisión
+    """
     scores = []
-
+    cumulative_mean = []
+    cumulative_std = []
+    
     for i in range(n_it):
-
+        # Dividir los datos de manera aleatoria en cada iteración
         x_train, x_test, y_train, y_test = train_test_split(
-        data, labels, test_size=0.2, stratify=labels, random_state=None)
+            data, labels, test_size=test_size, stratify=labels, random_state=None, shuffle=True
+        )
 
         model = RandomForestClassifier(
         n_estimators=mejores_hiperparámetros['n_estimators'],
@@ -152,22 +169,44 @@ def repeat_training(n_it):
         min_samples_split=mejores_hiperparámetros['min_samples_split'],
         random_state=None)
 
+        # Entrenar el modelo
         model.fit(x_train, y_train)
-        
         y_predict = model.predict(x_test)
-        
-        score = accuracy_score(y_predict, y_test)
-        scores.append(score)
-        
-        print(f'{score * 100:.2f}% de las muestras fueron clasificadas correctamente en la iteración {i+1}!')
 
-    # Calcula la media de los scores
+        # Calcular métricas
+        score = accuracy_score(y_test, y_predict)
+        scores.append(score)
+        current_mean = np.mean(scores)
+        current_std = np.std(scores)
+        cumulative_mean.append(current_mean)
+        cumulative_std.append(current_std)
+
+        #print(f'{score * 100:.2f}% de las muestras fueron clasificadas correctamente en la iteración {i+1}!')
+
+    # Calcular la media y desviación de los scores
     mean_score = np.mean(scores)
     std_score = np.std(scores)
-    print(f'Average score after {n_it} iterations: {mean_score * 100:.2f}% ± {std_score * 100:.2f}%')
+    sem_score = std_score / np.sqrt(n_it)
+    print(f'El acierto medio después de {n_it} iteraciones es de: {mean_score * 100:.2f}% ± {std_score * 100:.2f}% (SEM: {sem_score * 100:.2f}%)')
+    print(f'El error estándar de la media es {sem_score * 100:.2f}%')
 
+    # Visualizar los resultados
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, n_it + 1), scores, marker='o', linestyle='-', color='blue', label='Precisión por Iteración')
+    plt.plot(range(1, n_it + 1), cumulative_mean, marker='x', linestyle='--', color='red', label='Media Acumulada')
+    plt.plot(range(1, n_it + 1), [m + s for m, s in zip(cumulative_mean, cumulative_std)], 
+             linestyle=':', color='green', label='Media + Desviación Estándar')
+    plt.plot(range(1, n_it + 1), [m - s for m, s in zip(cumulative_mean, cumulative_std)], 
+             linestyle=':', color='green', label='Media - Desviación Estándar')
+    plt.title('Resultados de Repetición de Entrenamiento')
+    plt.xlabel('Iteración')
+    plt.ylabel('Precisión (%)')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('algorythms/random_forests/resultados_repeticion_entrenamiento.png')
+    plt.close() 
 
-    return mean_score
+    return mean_score, std_score, sem_score
 
 
 # -----------------------------------------------------
@@ -175,7 +214,7 @@ def repeat_training(n_it):
 # -----------------------------------------------------
 if repeat:
     print("\n--- Ejecutando Repetición de Entrenamiento ---")
-    repeat_training(n_it)
+    mean, std, sem = repeat_training(n_it, labels, test_size=0.2)
     
 if cross_val:
     print("\n--- Ejecutando Validación Cruzada ---")
