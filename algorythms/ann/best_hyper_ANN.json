@@ -1,0 +1,1 @@
+{"batch_size": 10, "epochs": 150, "model__kernel_initializer": "he_uniform", "model__optimizer": "adam"}
