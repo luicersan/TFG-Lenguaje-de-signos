@@ -4,38 +4,65 @@ import os
 import time
 import psutil
 import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, cross_val_predict, StratifiedKFold
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import numpy as np
+import random
 
 # -----------------------------------------------------
-# Parámetros para las funciones
+# 1. Configuración de Semillas Aleatorias para Reproducibilidad
+# -----------------------------------------------------
+seed = 42
+np.random.seed(seed)
+random.seed(seed)
+os.environ['PYTHONHASHSEED'] = str(seed)
+
+# -----------------------------------------------------
+# 2. Definición de Directorios de Salida
+# -----------------------------------------------------
+# Directorio base para resultados
+output_dir = 'algorythms/random_forests/results_rf'
+
+# Subdirectorios para diferentes tipos de resultados
+confusion_matrix_dir = os.path.join(output_dir, 'confusion_matrices')
+classification_report_dir = os.path.join(output_dir, 'classification_reports')
+
+# Crear los directorios si no existen
+os.makedirs(confusion_matrix_dir, exist_ok=True)
+os.makedirs(classification_report_dir, exist_ok=True)
+
+# -----------------------------------------------------
+# 3. Parámetros para las funciones
 # -----------------------------------------------------
 calcular_hiperparametros = False
 
-cross_val = False
-cv_folds = 9 # Nº de pliegues validación cruzada
+cross_val = True
+cv_folds = 9  # Nº de pliegues validación cruzada
 
 adjust_cross_val = False
-k_values=[5,6,7,8,9,10,11,12,13,14,15,16,17,18] # Valores para el ajuste de validación cruzada
+k_values = [5,6,7,8,9,10,11,12,13,14,15,16,17,18]  # Valores para el ajuste de validación cruzada
 
 repeat = False
-n_it = 30 # Nº de iteraciones de la repetición de entrenamiento
+n_it = 30  # Nº de iteraciones de la repetición de entrenamiento
 
 # Ruta del archivo JSON para guardar/cargar los mejores hiperparámetros
 script_dir = os.path.dirname(os.path.abspath(__file__))
 json_path = os.path.join(script_dir, 'best_hyper_rf.json')
 
-# Cargar los datos
-data_dict = pickle.load(open('./data.pickle', 'rb'))
+# -----------------------------------------------------
+# 4. Cargar los datos
+# -----------------------------------------------------
+with open('./data.pickle', 'rb') as f:
+    data_dict = pickle.load(f)
+
 data = np.asarray(data_dict['data'])
 labels = np.asarray(data_dict['labels'])
 
-
-# -------------------------------
-# Ajuste de hiperparámeros
-# -------------------------------
+# -----------------------------------------------------
+# 5. Ajuste de hiperparámetros
+# -----------------------------------------------------
 if calcular_hiperparametros:
     # Definir los hiperparámetros a ajustar
     param_grid = {
@@ -47,10 +74,10 @@ if calcular_hiperparametros:
     }
 
     # Crear el modelo RandomForestClassifier
-    model = RandomForestClassifier(random_state=42)
+    model = RandomForestClassifier(random_state=seed)
 
     # Configurar el GridSearchCV para encontrar los mejores hiperparámetros
-    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, scoring='accuracy', n_jobs=-1, verbose=2)
 
     # Ajustar el modelo usando la búsqueda de hiperparámetros
     grid_search.fit(data, labels)
@@ -67,22 +94,13 @@ if calcular_hiperparametros:
 else:
     # Cargar los mejores hiperparámetros desde el archivo JSON
     with open(json_path, 'r') as f:
-        mejores_hiperparámetros = json.load(f)
+        mejores_hiperparametros = json.load(f)
 
-    print(f"Hiperparámetros cargados: {mejores_hiperparámetros}")
+    print(f"Hiperparámetros cargados: {mejores_hiperparametros}")
 
-# Definir el modelo con hiperparámetros cargados o encontrados (ahora de define en las funciones)
-'''model = RandomForestClassifier(
-    n_estimators=mejores_hiperparámetros['n_estimators'],
-    max_depth=mejores_hiperparámetros['max_depth'],
-    bootstrap=mejores_hiperparámetros['bootstrap'],
-    min_samples_leaf=mejores_hiperparámetros['min_samples_leaf'],
-    min_samples_split=mejores_hiperparámetros['min_samples_split']
-)'''
-
-# -------------------------------
-# Medición de recursos
-# -------------------------------
+# -----------------------------------------------------
+# 6. Medición de recursos
+# -----------------------------------------------------
 def medir_recursos(func):
     def wrapper(*args, **kwargs):
         proceso = psutil.Process(os.getpid())
@@ -104,40 +122,77 @@ def medir_recursos(func):
         print(f"Tiempo de ejecución: {tiempo_ejecucion:.2f} segundos")
         print(f"CPU usada: {uso_cpu:.2f}%")
         
-        return resultado
+        # Retornar los resultados junto con uso_cpu y tiempo_ejecucion
+        return resultado[0], resultado[1], uso_cpu, tiempo_ejecucion
     return wrapper
 
-
-# -------------------------------
-# Alternativa: Validación Cruzada
-# -------------------------------
+# -----------------------------------------------------
+# 7. Función de Validación Cruzada
+# -----------------------------------------------------
 @medir_recursos
-def cross_validation(k):
-
-    model = RandomForestClassifier(
-    n_estimators=mejores_hiperparámetros['n_estimators'],
-    max_depth=mejores_hiperparámetros['max_depth'],
-    bootstrap=mejores_hiperparámetros['bootstrap'],
-    min_samples_leaf=mejores_hiperparámetros['min_samples_leaf'],
-    min_samples_split=mejores_hiperparámetros['min_samples_split'],
-    random_state=None
+def cross_validation(k, mejores_hiperparametros, x, y):
+    model_cv = RandomForestClassifier(
+        n_estimators=mejores_hiperparametros['n_estimators'],
+        max_depth=mejores_hiperparametros['max_depth'],
+        bootstrap=mejores_hiperparametros['bootstrap'],
+        min_samples_leaf=mejores_hiperparametros['min_samples_leaf'],
+        min_samples_split=mejores_hiperparametros['min_samples_split'],
+        random_state=seed  # Asegurar reproducibilidad
     )
 
-    scores = cross_val_score(model, data, labels, cv=k, scoring='accuracy', n_jobs=-1)
-    std_score = np.std(scores)
-    sem_score = std_score / np.sqrt(n_it)
+    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=seed)
+    
+    # Realizar la validación cruzada
+    scores = cross_val_score(
+        model_cv,
+        x,
+        y,
+        cv=skf,
+        scoring='accuracy',
+        n_jobs=-1
+    )
 
-    # Mostrar la precisión media, desviación estándar y error estándar
+    # Obtener predicciones para matriz de confusión y reporte de clasificación
+    y_pred = cross_val_predict(
+        model_cv,
+        x,
+        y,
+        cv=skf,
+        n_jobs=-1
+    )
+
+    # Generar y guardar la matriz de confusión
+    cm = confusion_matrix(y, y_pred)
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=np.unique(y),
+                yticklabels=np.unique(y))
+    plt.ylabel('Etiqueta Verdadera')
+    plt.xlabel('Etiqueta Predicha')
+    plt.title(f'Matriz de Confusión - {k}-Fold Cross-Validation')
+    cm_path = os.path.join(confusion_matrix_dir, f'confusion_matrix_{k}_fold.png')
+    plt.savefig(cm_path)
+    plt.close()
+    print(f"Matriz de confusión guardada en: {cm_path}")
+
+    # Generar y guardar el informe de clasificación
+    report = classification_report(y, y_pred, target_names=np.unique(y).astype(str))
+    report_path = os.path.join(classification_report_dir, f'classification_report_{k}_fold.txt')
+    with open(report_path, 'w') as f:
+        f.write(report)
+    print(f"Informe de clasificación guardado en: {report_path}")
+
+    std_score = np.std(scores)
+    sem_score = std_score / np.sqrt(k)
+
     print(f'Precisión media con {k}-Fold Cross-Validation: {scores.mean() * 100:.2f}%')
     print(f'Desviación estándar: {std_score * 100:.2f}%')
     print(f'Error estándar de la media: {sem_score * 100:.2f}%')
 
-    
     return scores.mean(), scores.std()
 
-
 # -----------------------------------------------------
-# Alternativa: Repetición de Entrenamiento
+# 8. Alternativa: Repetición de Entrenamiento
 # -----------------------------------------------------
 @medir_recursos
 def repeat_training(n_it, labels, test_size):
@@ -145,9 +200,7 @@ def repeat_training(n_it, labels, test_size):
     Repite el entrenamiento del modelo varias veces con diferentes divisiones de datos y aleatoriedad en el modelo, promediando los resultados.
 
     :param n_it: Número de iteraciones
-    :param data: Datos de entrada
     :param labels: Etiquetas
-    :param model_params: Diccionario de parámetros para RandomForestClassifier
     :param test_size: Proporción del conjunto de prueba
     :return: Media y desviación estándar de las puntuaciones de precisión
     """
@@ -162,12 +215,13 @@ def repeat_training(n_it, labels, test_size):
         )
 
         model = RandomForestClassifier(
-        n_estimators=mejores_hiperparámetros['n_estimators'],
-        max_depth=mejores_hiperparámetros['max_depth'],
-        bootstrap=mejores_hiperparámetros['bootstrap'],
-        min_samples_leaf=mejores_hiperparámetros['min_samples_leaf'],
-        min_samples_split=mejores_hiperparámetros['min_samples_split'],
-        random_state=None)
+            n_estimators=mejores_hiperparametros['n_estimators'],
+            max_depth=mejores_hiperparametros['max_depth'],
+            bootstrap=mejores_hiperparametros['bootstrap'],
+            min_samples_leaf=mejores_hiperparametros['min_samples_leaf'],
+            min_samples_split=mejores_hiperparametros['min_samples_split'],
+            random_state=None
+        )
 
         # Entrenar el modelo
         model.fit(x_train, y_train)
@@ -180,8 +234,6 @@ def repeat_training(n_it, labels, test_size):
         current_std = np.std(scores)
         cumulative_mean.append(current_mean)
         cumulative_std.append(current_std)
-
-        #print(f'{score * 100:.2f}% de las muestras fueron clasificadas correctamente en la iteración {i+1}!')
 
     # Calcular la media y desviación de los scores
     mean_score = np.mean(scores)
@@ -208,9 +260,8 @@ def repeat_training(n_it, labels, test_size):
 
     return mean_score, std_score, sem_score
 
-
 # -----------------------------------------------------
-# Llamadas a las funciones
+# 9. Llamadas a las funciones
 # -----------------------------------------------------
 if repeat:
     print("\n--- Ejecutando Repetición de Entrenamiento ---")
@@ -218,11 +269,10 @@ if repeat:
     
 if cross_val:
     print("\n--- Ejecutando Validación Cruzada ---")
-    cross_validation(cv_folds)
-
+    media_accuracy, std_accuracy, uso_cpu, tiempo_ejecucion = cross_validation(cv_folds, mejores_hiperparametros, data, labels)
+    
 if adjust_cross_val:
     print("\n--- Ejecutando el ajuste de Validación Cruzada ---")
-
     for k in k_values:
-        cross_validation(k)
+        media_accuracy, std_accuracy, uso_cpu, tiempo_ejecucion = cross_validation(k, mejores_hiperparametros, data, labels)
         print("\n")
