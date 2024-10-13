@@ -23,15 +23,10 @@ os.environ['PYTHONHASHSEED'] = str(seed)
 # 2. Definición de Directorios de Salida
 # -----------------------------------------------------
 # Directorio base para resultados
-output_dir = 'algorythms/random_forests/results_rf'
-
-# Subdirectorios para diferentes tipos de resultados
-confusion_matrix_dir = os.path.join(output_dir, 'confusion_matrices')
-classification_report_dir = os.path.join(output_dir, 'classification_reports')
+results_dir = 'algorythms/random_forests/results'
 
 # Crear los directorios si no existen
-os.makedirs(confusion_matrix_dir, exist_ok=True)
-os.makedirs(classification_report_dir, exist_ok=True)
+os.makedirs(results_dir, exist_ok=True)
 
 # -----------------------------------------------------
 # 3. Parámetros para las funciones
@@ -44,7 +39,7 @@ cv_folds = 9  # Nº de pliegues validación cruzada
 adjust_cross_val = False
 k_values = [5,6,7,8,9,10,11,12,13,14,15,16,17,18]  # Valores para el ajuste de validación cruzada
 
-repeat = False
+repeat = True
 n_it = 30  # Nº de iteraciones de la repetición de entrenamiento
 
 # Ruta del archivo JSON para guardar/cargar los mejores hiperparámetros
@@ -169,15 +164,15 @@ def cross_validation(k, mejores_hiperparametros, x, y):
                 yticklabels=np.unique(y))
     plt.ylabel('Etiqueta Verdadera')
     plt.xlabel('Etiqueta Predicha')
-    plt.title(f'Matriz de Confusión - {k}-Fold Cross-Validation')
-    cm_path = os.path.join(confusion_matrix_dir, f'confusion_matrix_{k}_fold.png')
+    plt.title(f'Matriz de Confusión - Random Forests con {k}-Fold Cross-Validation')
+    cm_path = os.path.join(results_dir, f'confusion_matrix_rf_{k}_fold.png')
     plt.savefig(cm_path)
     plt.close()
     print(f"Matriz de confusión guardada en: {cm_path}")
 
     # Generar y guardar el informe de clasificación
     report = classification_report(y, y_pred, target_names=np.unique(y).astype(str))
-    report_path = os.path.join(classification_report_dir, f'classification_report_{k}_fold.txt')
+    report_path = os.path.join(results_dir, f'classification_report_{k}_fold.txt')
     with open(report_path, 'w') as f:
         f.write(report)
     print(f"Informe de clasificación guardado en: {report_path}")
@@ -255,7 +250,8 @@ def repeat_training(n_it, labels, test_size):
     plt.ylabel('Precisión (%)')
     plt.legend()
     plt.grid(True)
-    plt.savefig('algorythms/random_forests/resultados_repeticion_entrenamiento.png')
+    rt_path = os.path.join(results_dir, 'resultados_repeticion_rf.png')
+    plt.savefig(rt_path)
     plt.close() 
 
     return mean_score, std_score, sem_score
@@ -264,7 +260,7 @@ def repeat_training(n_it, labels, test_size):
 # 9. Llamadas a las funciones
 # -----------------------------------------------------
 if repeat:
-    print("\n--- Ejecutando Repetición de Entrenamiento ---")
+    print(f"\n--- Ejecutando Repetición de Entrenamiento con {n_it} iteraciones ---")
     mean, std, sem = repeat_training(n_it, labels, test_size=0.2)
     
 if cross_val:
