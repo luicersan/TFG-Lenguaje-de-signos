@@ -20,15 +20,10 @@ from collections import Counter
 # 1. Definición de Directorios de Salida
 # -------------------------------
 # Directorio base para resultados
-output_dir = 'algorythms/ann/results'
-
-# Subdirectorios para diferentes tipos de resultados
-confusion_matrix_dir = os.path.join(output_dir, 'confusion_matrices')
-classification_report_dir = os.path.join(output_dir, 'classification_reports')
+results_dir = 'algorythms/ann/results'
 
 # Crear los directorios si no existen
-os.makedirs(confusion_matrix_dir, exist_ok=True)
-os.makedirs(classification_report_dir, exist_ok=True)
+os.makedirs(results_dir, exist_ok=True)
 
 # -------------------------------
 # 2. Establecer semillas para reproducibilidad
@@ -192,15 +187,15 @@ def cross_validation(k, mejores_hiperparametros, x, y):
                 yticklabels=label_encoder.classes_)
     plt.ylabel('Etiqueta Verdadera')
     plt.xlabel('Etiqueta Predicha')
-    plt.title(f'Matriz de Confusión - {k}-Fold Cross-Validation')
-    cm_path = os.path.join(confusion_matrix_dir, f'confusion_matrix_{k}_fold.png')
+    plt.title(f'Matriz de Confusión - ANN con {k}-Fold Cross-Validation')
+    cm_path = os.path.join(results_dir, f'confusion_matrix_ann_{k}_fold.png')
     plt.savefig(cm_path)
     plt.close()
     print(f"Matriz de confusión guardada en: {cm_path}")
 
     # Generar y guardar el informe de clasificación
     report = classification_report(y, y_pred, target_names=label_encoder.classes_)
-    report_path = os.path.join(classification_report_dir, f'classification_report_{k}_fold.txt')
+    report_path = os.path.join(results_dir, f'classification_report_{k}_fold.txt')
     with open(report_path, 'w') as f:
         f.write(report)
     print(f"Informe de clasificación guardado en: {report_path}")
